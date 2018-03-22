@@ -1,0 +1,13 @@
+{
+  "name": "ssb-invites-db",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "flumeview-reduce": "^1.3.13",
+    "lodash": "^4.17.5",
+    "pull-stream": "^3.6.2"
+  }
+}
