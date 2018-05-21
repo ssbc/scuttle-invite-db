@@ -1,8 +1,9 @@
 const flumeView = require('flumeview-reduce')
 const pull = require('pull-stream')
 const get = require('lodash/get')
+const extend = require('xtend')
 
-const FLUME_VIEW_VERSION = 1.3
+const FLUME_VIEW_VERSION = 1.0
 const FLUME_VIEW_NAME = "invites"
 const MSG_TYPE = "invite"
 
@@ -28,11 +29,13 @@ module.exports = {
 
 function reduce (accumulator, item) {
   var accumulator = accumulator || {}
-  const { root, recipient } = item
-  if (root && recipient) {
+  const { root, recipient, text, mentions } = item
+  if (root && recipient ) {
+    console.log(recipient)
     var invites = get(accumulator, [root], new Array())
-    invite = invites.filter(invite => invite === recipient).length > 0
-    if (!invite) invites.push(recipient)
+    var recp = typeof recipient === 'string' ? recipient : recipient.link
+    invite = invites.filter(invite => invite.id === recp).length > 0
+    if (!invite) invites.push({ id: recp, text: text })
     accumulator[root] = invites
   }
   return accumulator
@@ -41,8 +44,10 @@ function reduce (accumulator, item) {
 function map (msg) {
   const { author, content } = msg.value
   if (get(content, 'type') !== MSG_TYPE) return null
+  var recipient = content.recps.filter(recipient => recipient !== get(msg, "value.author"))[0]
   return {
     root: content.root,
-    recipient: content.recipient.link
+    recipient: recipient,
+    text: content.text
   }
 }
