@@ -84,5 +84,6 @@ function createResponse (event, invite, cb) {
     recps: [grace.id, frank.id]
   }
   console.log(isResponse(stuff))
+  // isResponse is returning undefined? Why?
   frank.publish(stuff, cb)
 }
