@@ -1,7 +1,7 @@
 const flumeView = require('flumeview-reduce')
-const pull = require('pull-stream')
+const { isInvite, isResponse } = require('ssb-invites-schema')
+const { isFeedId } = require('ssb-ref')
 const get = require('lodash/get')
-const extend = require('xtend')
 
 const FLUME_VIEW_VERSION = 1.0
 const FLUME_VIEW_NAME = "invites"
@@ -9,45 +9,79 @@ const MSG_TYPE = "invite"
 
 module.exports = {
   name: FLUME_VIEW_NAME,
-  version: '1.0.0',
+  version: require('./package.json').version,
   manifest: {
-    get: 'async',
+    find: 'async',
+    all: 'async',
     stream: 'source'
   },
-  init: function (ssbServer, config) {
-    const view = ssbServer._flumeUse(
+  init: function (server, config) {
+    const view = server._flumeUse(
       FLUME_VIEW_NAME,
       flumeView(FLUME_VIEW_VERSION, reduce, map, null, {})
     )
 
     return {
-      get: view.get,
+      find: (key, cb) => {
+        view.get((err, data) => {
+          if (err) cb(err)
+          for(var k in data) {
+            var root = data[k]
+            if (!root) continue
+            var invite = root.filter(inv => inv.id === key)[0]
+            if (!invite) {
+              return cb(new Error('No invite with that id'))
+              break
+            } else {
+              return cb(null, invite)
+              break
+            }
+          }
+          return cb(new Error('invite key has no root'))
+        })
+      },
+      all: view.get,
       stream: view.stream
     }
   }
 }
 
 function reduce (accumulator, item) {
-  var accumulator = accumulator || {}
-  const { root, recipient, text, mentions } = item
-  if (root && recipient ) {
-    console.log(recipient)
-    var invites = get(accumulator, [root], new Array())
-    var recp = typeof recipient === 'string' ? recipient : recipient.link
-    invite = invites.filter(invite => invite.id === recp).length > 0
-    if (!invite) invites.push({ id: recp, text: text })
-    accumulator[root] = invites
+  const {
+    root, branch, id,
+    author, recipient, body,
+    mentions, accept
+  } = item
+
+  if (root && recipient) {
+    var invites = get(accumulator, [root], new Set())
+    if (branch) {
+      invites = invites
+        .filter(invite => invite.id === id && invite.recipient === author)
+        .map(invite => invite.accepted = accept)
+      accumulator[root] = invites
+    } else {
+      var recp = typeof recipient === 'string' ? recipient : recipient.link
+      invites.add({ id, recipient: recp, body })
+      accumulator[root] = Array.from(invites)
+    }
   }
   return accumulator
 }
 
 function map (msg) {
   const { author, content } = msg.value
-  if (get(content, 'type') !== MSG_TYPE) return null
-  var recipient = content.recps.filter(recipient => recipient !== get(msg, "value.author"))[0]
+  if (!isInvite(content) && !isResponse(content)) return null
+  var recipient = content.recps
+    .filter(recipient => recipient !== author)[0]
+
   return {
     root: content.root,
+    branch: content.branch,
+    id: msg.key,
+    author: author,
     recipient: recipient,
-    text: content.text
+    body: content.body,
+    accept: content.accept
   }
 }

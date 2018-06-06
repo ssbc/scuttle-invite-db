@@ -1,28 +1,88 @@
 const Server = require('scuttle-testbot')
-const Keys = require('ssb-keys')
 const test = require('tape')
-const pry = require('pryjs')
 const pull = require('pull-stream')
+const { isResponse } = require('ssb-invites-schema')
 
-Server.use(require('../index.js'))
+Server
+  .use(require('../index.js'))
 
-var keys = Keys.generate()
+const server = Server()
 
-var server = Server({
-  name: 'test0000',
-  keys: keys
-})
+var grace = server.createFeed()
+var frank = server.createFeed()
 
-var feed = server.createFeed(keys)
+test("grace invites frank to an event", assert => {
+  assert.plan(1)
 
-test("Publish Invite", t => {
-  feed.add({
-    type: "invite",
-    recps: [
-      "@Msdf2S8sdfKJasdsA98Uasdfkjsd/ASdfsdfsdfa=ss=.ed25519",
-      "@NeB4q4Hy9IiMxs5L08oevEhivxW+/aDu/s/0SkNayi0=.ed25519"
-    ]
-  }, (err, msg) => {
+  createEvent((err, event) => {
+    createInvite(event, (err, invite) => {
+      server.invites.find(invite.key, (err, inv) => {
+        find = {
+          id: invite.key,
+          body: invite.value.content.body,
+          recipient: frank.id
+        }
+        assert.deepEqual(inv, find)
+        server.close()
+      })
+    })
   })
 })
 
+test("frank responds to grace's invite", assert => {
+  assert.plan(1)
+
+  createEvent((err, event) => {
+    createInvite(event, (err, invite) => {
+      createResponse(event, invite, (err, response) => {
+        server.invites.find(invite.key, (err, inv) => {
+          find = {
+            id: invite.key,
+            body: invite.value.content.body,
+            recipient: frank.id,
+            accepted: true
+          }
+          assert.deepEqual(inv, find)
+          server.close()
+        })
+      })
+    })
+  })
+})
+
+function createEvent (cb) {
+  grace.publish({
+    type: 'event',
+    title: 'Magical Mystery Tour',
+    body: 'come to an awesome mushroom workshop, where we drink magic potion and talk about toadstools'
+  }, cb)
+}
+
+function createInvite (event, cb) {
+  grace.publish({
+    type: 'invite',
+    module: 'events',
+    version: 'v1',
+    root: event.key,
+    body: `hey @frank, do you want to come to my super mushroom workshop [Magical Mystery Tour](${event.key})?`,
+    recps: [grace.id, frank.id],
+    mentions: [
+      { link: event.key },
+      { link: frank.id, name: 'frank' }
+    ]
+  }, cb)
+}
+
+function createResponse (event, invite, cb) {
+  var stuff = {
+    type: 'response',
+    version: 'v1',
+    root: event.key,
+    branch: invite.key,
+    body: `Yessum`,
+    accept: true,
+    recps: [grace.id, frank.id]
+  }
+  console.log(isResponse(stuff))
+  frank.publish(stuff, cb)
+}
