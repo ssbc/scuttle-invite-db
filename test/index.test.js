@@ -19,8 +19,10 @@ test("grace invites frank to an event", assert => {
       server.invites.find(invite.key, (err, inv) => {
         find = {
           id: invite.key,
-          body: invite.value.content.body,
-          recipient: frank.id
+          invite: {
+            body: invite.value.content.body,
+            recipient: frank.id
+          }
         }
         assert.deepEqual(inv, find)
         server.close()
@@ -36,11 +38,16 @@ test("frank responds to grace's invite", assert => {
     createInvite(event, (err, invite) => {
       createResponse(event, invite, (err, response) => {
         server.invites.find(invite.key, (err, inv) => {
+          if (err) throw err
           find = {
             id: invite.key,
-            body: invite.value.content.body,
-            recipient: frank.id,
-            accepted: true
+            invite: {
+              body: invite.value.content.body,
+              recipient: frank.id,
+            },
+            response: {
+              accepted: true
+            }
           }
           assert.deepEqual(inv, find)
           server.close()
@@ -74,7 +81,7 @@ function createInvite (event, cb) {
 }
 
 function createResponse (event, invite, cb) {
-  var stuff = {
+  frank.publish({
     type: 'response',
     version: 'v1',
     root: event.key,
@@ -82,8 +89,5 @@ function createResponse (event, invite, cb) {
     body: `Yessum`,
     accept: true,
     recps: [grace.id, frank.id]
-  }
-  console.log(isResponse(stuff))
-  // isResponse is returning undefined? Why?
-  frank.publish(stuff, cb)
+  }, cb)
 }

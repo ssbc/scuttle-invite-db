@@ -1,7 +1,7 @@
 const flumeView = require('flumeview-reduce')
 const { isInvite, isResponse } = require('ssb-invites-schema')
 const { isFeedId } = require('ssb-ref')
-const get = require('lodash/get')
+const _ = require('lodash')
 
 const FLUME_VIEW_VERSION = 1.0
 const FLUME_VIEW_NAME = "invites"
@@ -22,26 +22,35 @@ module.exports = {
     )
 
     return {
-      find: (key, cb) => {
-        view.get((err, data) => {
-          if (err) cb(err)
-          for(var k in data) {
-            var root = data[k]
-            if (!root) continue
-            var invite = root.filter(inv => inv.id === key)[0]
-            if (!invite) {
-              return cb(new Error('No invite with that id'))
-              break
-            } else {
-              return cb(null, invite)
-              break
-            }
-          }
-          return cb(new Error('invite key has no root'))
-        })
-      },
+      find: find,
       all: view.get,
       stream: view.stream
+    }
+
+    function find (key, cb) {
+      view.get((err, data) => {
+        if (err) cb(err)
+        for(var k in data) {
+          var invites = data[k]
+          if (!invites) continue
+          var invite = invites.filter(invite => invite.id === key)[0]
+          if (!invite) continue
+          else {
+            return cb(null, invite)
+            break
+          }
+        }
+        return cb(new Error('invite does not exist'))
+      })
+    }
+
+    function findBy (keys, cb) {
+      view.get((err, data) => {
+        if (err) cb(err)
+        for(var k in data) {
+          var invites = data[k]
+        }
+      })
     }
   }
 }
@@ -54,15 +63,16 @@ function reduce (accumulator, item) {
   } = item
 
   if (root && recipient) {
-    var invites = get(accumulator, [root], new Set())
+    var invites = _.get(accumulator, [root], new Set())
     if (branch) {
-      invites = invites
-        .filter(invite => invite.id === id && invite.recipient === author)
-        .map(invite => invite.accepted = accept)
+      var invites = _.values(_.merge(
+        _.keyBy(invites, 'id'),
+        _.keyBy([{ id: branch, response: { accepted: accept } }], 'id')
+      ))
       accumulator[root] = invites
     } else {
       var recp = typeof recipient === 'string' ? recipient : recipient.link
-      invites.add({ id, recipient: recp, body })
+      invites.add({ id, invite: { recipient: recp, body } })
       accumulator[root] = Array.from(invites)
     }
   }
