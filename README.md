@@ -72,9 +72,9 @@ stream: 'source'
 }
 ```
 
-This data structure allows the developer to access a set of invites based on its `root` record, be that an event, a group, a cabal... and render them and their messages / responses appropriately.
+This data structure allows the developer to access a set of invites based on its `root` record, be that an event, a group, a cabal... and render them and their invites / responses appropriately.
 
 ## TODO / THINK
 * Think about how to render the invites and their responses, what different perspectives / lenses on the data would be useful?
 * If a response is amended, should it store its 'branch' response?
-
+* `stream` currently data structure is slightly different to enable it to be iterable. Should they be standardised? If so it means changing the conventional structure from an object to array, which could be slower to access... find out!

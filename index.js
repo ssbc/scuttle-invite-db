@@ -1,13 +1,11 @@
 const flumeView = require('flumeview-reduce')
-const { isInvite, isResponse } = require('ssb-invites-schema')
-const { isFeedId } = require('ssb-ref')
-const _ = require('lodash')
+const defer = require('pull-defer')
+const iterable = require('pull-iterable')
+
+const { parseInvite, parseResponse } = require('ssb-invites-schema')
 
 const FLUME_VIEW_VERSION = 1.0
 const FLUME_VIEW_NAME = "invites"
-
-const getContent = (msg) => _.get(msg, 'value.content')
-const getType = (msg) => _.get(msg, 'value.content.type')
 
 module.exports = {
   name: FLUME_VIEW_NAME,
@@ -24,7 +22,7 @@ module.exports = {
         FLUME_VIEW_VERSION,
         flumeReduceFunction, flumeMapFunction,
         null,
-        flumeAccumulatorInitialState
+        flumeAccumulatorInitialState()
       )
     )
 
@@ -35,7 +33,13 @@ module.exports = {
         var source = defer.source()
         view.get((err, data) => {
           if (err) source.abort(err)
-          else source.resolve(Object.values(data))
+          else {
+            var mapped = Object.keys(data).map(root => {
+              var { invites, responses } = data[root]
+              return { root, invites, responses }
+            })
+            source.resolve(iterable(mapped))
+          }
         })
         return source
       }
@@ -45,81 +49,96 @@ module.exports = {
 
 // Credit to Happy0! This is super neat way of drying up code
 function withView (view, cb, fn) {
-  view.get((err, msg) => {
-    if (err) return cb(err)
-    cb(null, fn(msg))
-  })
-}
-
-function findInvites (key, cb) {
   view.get((err, data) => {
-    if (err) cb(err)
-    for(var k in data) {
-      var invites = data[k]
-      if (!invites) continue
-      var invite = invites.filter(invite => invite.id === key)[0]
-      if (!invite) continue
-      else {
-        return cb(null, invite)
-        break
-      }
-    }
-    return cb(new Error('invite does not exist'))
+    if (err) return cb(err)
+    cb(null, fn(data))
   })
 }
 
-function handleInviteMessage (accumulator, msg) {
-  const id = msg.key
-  const { author, content } = msg.value
-  const { root, recps, body, mentions } = content
+function findInvites (key, data) {
+  for(var k in data) {
+    var root = data[k]
+    if (!root) continue
+    var invites = root['invites']
+    var invite = invites[key]
+    if (!invite) continue
+    else return invite
+  }
+  return null
+}
+
+function handleInviteMessage (accumulator, invite) {
+  const {
+    id,
+    author,
+    recipient,
+    root,
+    body,
+    mentions,
+    timestamp
+  } = invite
+
   var rootData = accumulator[root] || {}
   var invites = rootData['invites'] || {}
-  var recipient = recps.filter(recipient => recipient !== author)[0]
-
-  if (recipient) {
-    recipient = typeof recipient === 'string' ? recipient : recipient.link
-    if (!isFeedId(recipient)) return
-    invites[id] = { author, recipient, body, mentions }
-    rootData['invites'] = invites
-    accumulator[root] = rootData
-  }
+  invites[id] = { author, recipient }
+  if (mentions) invites[id]['mentions'] = mentions
+  if (body) invites[id]['body'] = body
+  rootData['invites'] = invites
+  accumulator[root] = rootData
 }
 
-function handleResponseMessage (accumulator, msg) {
-  const id = msg.key
-  const { author, content } = msg.value
-  const { root, branch, recps, accepted, body, mentions } = content
+function handleResponseMessage (accumulator, response) {
+  const {
+    id,
+    author,
+    recipient,
+    timestamp,
+    root,
+    branch,
+    accept,
+    body,
+    mentions
+  } = response
+
   var rootData = accumulator[root]
   var invites = rootData['invites']
+
   var invite = invites[branch]
+  if (!invite) return
 
-  if (invite) {
-    var responseData = { author, accepted, body, mentions }
-    var localResponses = invite['responses']
-    localResponses[id] = responseData
-    var responses = rootData[id] || {}
-    responses[id] = responseData
-  }
+  var responseData = { author, accepted: accept }
+  if (body) responseData['body'] = body
+  if (mentions) responseData['mentions'] = mentions
+  responseData['timestamp'] = timestamp
+  var responses = invite['responses'] || {}
+  responses[id] = responseData
+  rootData['responses'] = responses
+  invite['responses'] = responses
+  invite['accepted'] = accept
+  invites[branch] = invite
+  rootData['invites'] = invites
+  accumulator[root] = rootData
 }
 
-function isOfInvitesSchema (content) {
-  return isInvite(content) || isResponse(content)
+function parseWithSchema (msg) {
+  return parseInvite(msg) || parseResponse(msg)
 }
 
-function flumeReduceFunction (accumulator, msg) {
-  var type = getType(msg)
+function flumeReduceFunction (accumulator, inviteOrResponse) {
+  const { type } = inviteOrResponse
   if (type === 'invite') {
-    handleInviteMessage(accumulator, msg)
+    handleInviteMessage(accumulator, inviteOrResponse)
   } else if (type === 'response') {
-    handleResponseMessage(accumulator, msg)
+    handleResponseMessage(accumulator, inviteOrResponse)
   }
 
   return accumulator
 }
 
 function flumeMapFunction (msg) {
-  if (isOfInvitesSchema(getContent(msg))) {
-    return msg
+  var inviteOrResponse = parseWithSchema(msg)
+  if (inviteOrResponse) {
+    return inviteOrResponse
   }
 }
 
