@@ -105,8 +105,8 @@ function handleResponseMessage (accumulator, msg) {
   const root = content.root
   const branch = content.branch
 
-  var rootData = accumulator[root]
-  var invites = rootData['invites']
+  var rootData = accumulator[root] || {}
+  var invites = rootData['invites'] || {}
 
   var invite = invites[branch]
   if (!invite) return
