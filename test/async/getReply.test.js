@@ -2,7 +2,7 @@ const describe = require('tape-plus').describe
 
 const { PublishGathering, Server } = require('../methods.js')
 
-describe("invites.getResponse", context => {
+describe("invites.getReply", context => {
   let grace, frank
   let publishGathering
   let params
@@ -16,7 +16,7 @@ describe("invites.getResponse", context => {
 
     params = {
       version: 'v1',
-      body: `invitation or response message`,
+      body: `invitation or reply message`,
       recps: [grace.id, frank.id]
     }
   })
@@ -28,20 +28,20 @@ describe("invites.getResponse", context => {
   context("Without an invite", (assert, next) => {
     publishGathering((err, gathering) => {
       params = Object.assign({}, baseParams, {
-        type: 'response',
+        type: 'invite-reply',
         root: gathering.key
       })
-      grace.publish(params, (err, response) => {
-        server.invites.getResponse(response.key, (err, data) => {
+      grace.publish(params, (err, reply) => {
+        server.invites.getReply(reply.key, (err, data) => {
           assert.ok(err)
-          assert.equal(err.message, "no response with that key")
+          assert.equal(err.message, `Missing reply: ${reply.key}`)
           next()
         })
       })
     })
   })
 
-  context("Returns response with attached invites", (assert, next) => {
+  context("Returns reply with attached invites", (assert, next) => {
     publishGathering((err, gathering) => {
       params = Object.assign({}, baseParams, {
         type: 'invite',
@@ -49,15 +49,15 @@ describe("invites.getResponse", context => {
       })
       grace.publish(params, (err, invite) => {
         params = Object.assign({}, baseParams, {
-          type: 'response',
+          type: 'invite-reply',
           root: gathering.key,
           branch: invite.key,
           accept: true
         })
-        frank.publish(params, (err, response) => {
-          server.invites.getResponse(response.key, (err, data) => {
-            response['invite'] = invite
-            assert.deepEqual(response, data)
+        frank.publish(params, (err, reply) => {
+          server.invites.getReply(reply.key, (err, data) => {
+            reply['invite'] = invite
+            assert.deepEqual(reply, data)
             next()
           })
         })

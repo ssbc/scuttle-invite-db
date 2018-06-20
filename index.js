@@ -6,7 +6,7 @@ const getContent = require('ssb-msg-content')
 
 const {
   isInvite,
-  isResponse
+  isReply
 } = require('ssb-invites-schema')
 
 
@@ -18,9 +18,10 @@ module.exports = {
   version: require('./package.json').version,
   manifest: {
     getInvite: 'async',
-    getResponse: 'async',
-    // getInvitesByRoot: 'async',
-    // getResponsesByRoot: 'async'
+    getReply: 'async',
+    invitesByRoot: 'async',
+    repliesByRoot: 'async',
+    invitedByRoot: 'async'
   },
   init: function (server, config) {
     const view = server._flumeUse(
@@ -33,58 +34,88 @@ module.exports = {
       ))
 
     return {
-      getInvite: (id, cb) => withView(view, cb, getInvite.bind(null, id)),
-      getResponse: (id, cb) => withView(view, cb, getResponse.bind(null, id)),
-      // getInvitesByRoot: (root, cb) => withView(view, cb, getInvitesByRoot.bind(null, id)),
-      // getResponsesByRoot: (root, cb) => withView(view, cb, getResponsesByRoot.bind(null, id)),
-      // stream: () => {
-      //   var source = defer.source()
-      //   view.get((err, data) => {
-      //     if (err) source.abort(err)
-      //     else {
-      //       var mapped = Object.keys(data).map(root => {
-      //         var { invites, responses } = data[root]
-      //         return { root, invites, responses }
-      //       })
-      //       source.resolve(iterable(mapped))
-      //     }
-      //   })
-      //   return source
-      // }
+      getInvite: (id, callback) => withView(view, callback, getInvite.bind(null, id)),
+      getReply: (id, callback) => withView(view, callback, getReply.bind(null, id)),
+      invitesByRoot: (root, callback) => withView(view, callback, getInvitesByRoot.bind(null, id)),
+      repliesByRoot: (root, callback) => withView(view, callback, getReplysByRoot.bind(null, id)),
+      invitedByRoot: (id, callback) => withView(view, callback, invitedByRoot.bind(null, id))
     }
   }
 }
 
 // Credit to Happy0! This is super neat way of drying up code
-function withView (view, cb, fn) {
+function withView (view, callback, fn) {
   view.get((err, data) => {
-    if (err) return cb(err)
-    fn(data, cb)
+    if (err) return callback(err)
+    fn(data, callback)
   })
 }
 
-function getInvite (key, data, cb) {
+function getRoot(data, callback) {
   for(var k in data) {
-    var root = data[k]
-    if (!root) continue
-    var invites = root['invites'] || {}
-    var invite = invites[key]
-    if (!invite) continue
-    else return cb(null, invite)
+    success = callback(data[k])
+    if (success) return success
   }
-  return cb(new Error('no invite with that key'))
 }
 
-function getResponse (key, data, cb) {
-  for(var k in data) {
-    var root = data[k]
-    if (!root) continue
-    var responses = root['responses'] || {}
-    var response = responses[key]
-    if (!response) continue
-    else return cb(null, response)
-  }
-  return cb(new Error('no response with that key'))
+function getInvite (key, data, callback) {
+  var result = getRoot(data, (root) => {
+    var invites = root['invites'] || {}
+    var invite = invites[key]
+    if (!invite) return false
+    callback(null, invite)
+    return true
+  })
+  if (!result) callback(new Error(`Missing invite: ${key}`))
+}
+
+function getReply (key, data, callback) {
+  var result = getRoot(data, (root) => {
+    var replies = root['replies'] || {}
+    var reply = replies[key]
+    if (!reply) return false
+    callback(null, reply)
+    return true
+  })
+  if (!result) return callback(new Error(`Missing reply: ${key}`))
+}
+
+function invitedByRoot (key, data, callback) {
+  invitesByRoot(key, data, (invites) => {
+    var recps = invites
+      .map(getContent)
+      .map(content => content.recps)
+    var invited = Array.from(new Set(recps))
+    return callback(null, invited)
+  })
+}
+
+function invitesByRoot (key, data, callback) {
+  var result = getRoot(data, (root) => {
+    if (key !== root) return false
+    var invites = root['invites']
+    if (!invites) {
+      callback(new Error('no invites for this root'))
+      return false
+    }
+    callback(null, invites)
+    return true
+  })
+  if (!result) return callback(new Error(`Missing: ${key}`))
+}
+
+function repliesByRoot(root, data, callback) {
+  var result = getRoot(data, (root) => {
+    if (key !== root) return false
+    var invites = root['replies']
+    if (!replies) {
+      callback(new Error('no replies for this root'))
+      return false
+    }
+    callback(null, replies)
+    return true
+  })
+  if (!result) return callback(new Error(`Missing: ${key}`))
 }
 
 function handleInviteMessage (accumulator, msg) {
@@ -99,7 +130,7 @@ function handleInviteMessage (accumulator, msg) {
   accumulator[root] = rootData
 }
 
-function handleResponseMessage (accumulator, msg) {
+function handleReplyMessage (accumulator, msg) {
   const content = getContent(msg)
   const id = msg.key
   const root = content.root
@@ -111,15 +142,15 @@ function handleResponseMessage (accumulator, msg) {
   var invite = invites[branch]
   if (!invite) return
 
-  var responses = invite['responses'] || {}
-  responses[id] = msg
-  invite['responses'] = responses
+  var replies = invite['replies'] || {}
+  replies[id] = msg
+  invite['replies'] = replies
 
-  cloneInvite = JSON.parse(JSON.stringify(invite))
-  delete cloneInvite.responses
-  msg['invite'] = cloneInvite
-  responses[id] = msg
-  rootData['responses'] = responses
+  clone = JSON.parse(JSON.stringify(invite))
+  delete clone.replies
+  msg['invite'] = clone
+  replies[id] = msg
+  rootData['replies'] = replies
 
   invites[branch] = invite
   rootData['invites'] = invites
@@ -130,7 +161,7 @@ function isSchema (msg) {
   if (isInvite(msg)) return true
   else {
     delete msg.errors
-    return isResponse(msg)
+    return isReply(msg)
   }
 }
 
@@ -138,8 +169,8 @@ function flumeReduceFunction (accumulator, msg) {
   const content = getContent(msg)
   if (content.type === 'invite') {
     handleInviteMessage(accumulator, msg)
-  } else if (content.type === 'response') {
-    handleResponseMessage(accumulator, msg)
+  } else if (content.type === 'invite-reply') {
+    handleReplyMessage(accumulator, msg)
   }
 
   return accumulator
