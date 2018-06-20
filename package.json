@@ -16,6 +16,7 @@
     "ssb-msg-content": "^1.0.1"
   },
   "devDependencies": {
+    "pull-stream": "^3.6.8",
     "scuttle-testbot": "^1.1.6",
     "tap-diff": "^0.1.1",
     "tape": "^4.9.0",
