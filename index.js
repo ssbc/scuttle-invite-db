@@ -36,8 +36,8 @@ module.exports = {
     return {
       getInvite: (id, callback) => withView(view, callback, getInvite.bind(null, id)),
       getReply: (id, callback) => withView(view, callback, getReply.bind(null, id)),
-      invitesByRoot: (root, callback) => withView(view, callback, getInvitesByRoot.bind(null, id)),
-      repliesByRoot: (root, callback) => withView(view, callback, getReplysByRoot.bind(null, id)),
+      invitesByRoot: (root, callback) => withView(view, callback, byRoot.bind(null, root, 'invites')),
+      repliesByRoot: (root, callback) => withView(view, callback, byRoot.bind(null, root, 'replies')),
       invitedByRoot: (id, callback) => withView(view, callback, invitedByRoot.bind(null, id))
     }
   }
@@ -81,7 +81,7 @@ function getReply (key, data, callback) {
 }
 
 function invitedByRoot (key, data, callback) {
-  invitesByRoot(key, data, (invites) => {
+  byRoot(key, 'invites', data, (invites) => {
     var recps = invites
       .map(getContent)
       .map(content => content.recps)
@@ -90,32 +90,10 @@ function invitedByRoot (key, data, callback) {
   })
 }
 
-function invitesByRoot (key, data, callback) {
-  var result = getRoot(data, (root) => {
-    if (key !== root) return false
-    var invites = root['invites']
-    if (!invites) {
-      callback(new Error('no invites for this root'))
-      return false
-    }
-    callback(null, invites)
-    return true
-  })
-  if (!result) return callback(new Error(`Missing: ${key}`))
-}
-
-function repliesByRoot(root, data, callback) {
-  var result = getRoot(data, (root) => {
-    if (key !== root) return false
-    var invites = root['replies']
-    if (!replies) {
-      callback(new Error('no replies for this root'))
-      return false
-    }
-    callback(null, replies)
-    return true
-  })
-  if (!result) return callback(new Error(`Missing: ${key}`))
+function byRoot (key, type, data, callback) {
+  var collection = data[key]
+  if (!collection) return callback(new Error(`Missing: ${key}`))
+  return callback(null, collection[type])
 }
 
 function handleInviteMessage (accumulator, msg) {
