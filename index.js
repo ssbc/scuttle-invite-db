@@ -81,10 +81,12 @@ function getReply (key, data, callback) {
 }
 
 function invitedByRoot (key, data, callback) {
-  byRoot(key, 'invites', data, (invites) => {
-    var recps = invites
+  byRoot(key, 'invites', data, (err,  invites) => {
+    if (err) return callback(err)
+    var recps = Object.values(invites)
       .map(getContent)
       .map(content => content.recps)
+      .reduce((acc, recp) => acc.concat(recp), [])
     var invited = Array.from(new Set(recps))
     return callback(null, invited)
   })

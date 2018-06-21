@@ -26,7 +26,7 @@ describe("invites.byRoot", context => {
     server.close()
   })
 
-  context("Returns a collection of invites", (assert, next) => {
+  context("invitesByRoot returns a collection of invites", (assert, next) => {
     pull(
       pull.values([
         { type: 'gathering', body: "1" },
@@ -65,7 +65,7 @@ describe("invites.byRoot", context => {
     )
   })
 
-  context("Returns a collection of replies", (assert, next) => {
+  context("repliesByRoot returns a collection of replies", (assert, next) => {
     pull(
       pull.values([
         { type: 'gathering', body: "1" },
