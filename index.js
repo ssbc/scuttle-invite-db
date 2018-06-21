@@ -38,7 +38,37 @@ module.exports = {
       getReply: (id, callback) => withView(view, callback, getReply.bind(null, id)),
       invitesByRoot: (root, callback) => withView(view, callback, byRoot.bind(null, root, 'invites')),
       repliesByRoot: (root, callback) => withView(view, callback, byRoot.bind(null, root, 'replies')),
-      invitedByRoot: (id, callback) => withView(view, callback, invitedByRoot.bind(null, id))
+      invitedByRoot: (root, callback) => withView(view, callback, invitedByRoot.bind(null, root)),
+      repliedByRoot: (root, callback) => withView(view, callback, repliedByRoot.bind(null, root)),
+      acceptedByRoot: (root, callback) => withView(view, callback, acceptedByRoot.bind(null, root))
+    }
+
+    function repliedByRoot (key, data, callback) {
+      byRoot(key, 'replies', data, (err, replies) => {
+        if (err) return callback(err)
+        var recps = Object.values(replies)
+          .map(getContent)
+          .map(content => content.recps)
+          .reduce((acc, recp) => acc.concat(recp), [])
+          .filter(recp => recp !== server.whoami().id)
+        var replied = Array.from(new Set(recps))
+        return callback(null, replied)
+      })
+    }
+
+    function acceptedByRoot (key, data, callback) {
+      byRoot(key, 'replies', data, (err, replies) => {
+        if (err) return callback(err)
+        var recps = Object.values(replies)
+          .map(getContent)
+          .filter(content => content.accept)
+          .map(content => content.recps)
+          .reduce((acc, recp) => acc.concat(recp), [])
+          .filter(recp => recp !== server.whoami().id)
+
+        var accepted = Array.from(new Set(recps))
+        return callback(null, accepted)
+      })
     }
   }
 }
@@ -126,6 +156,7 @@ function handleReplyMessage (accumulator, msg) {
   replies[id] = msg
   invite['replies'] = replies
 
+  var replies = rootData['replies'] || {}
   clone = JSON.parse(JSON.stringify(invite))
   delete clone.replies
   msg['invite'] = clone
