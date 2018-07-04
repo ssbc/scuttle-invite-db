@@ -1,6 +1,6 @@
 # ssb-invites-db
 
-A flumeview-reduce using [ssb-invites-schema](https://github.com/kgibb8/ssb-invites-schema) for [scuttle-invite](https://github.com/kgibb8/scuttle-invite) ssb plugin. Allows for a polymorphic invitation/reply system to be used on-top of a `root ` record, such as a [Gathering](http://github.com/ssbc/patch-gathering).
+A flumeview-reduce using [scuttle-invite-schema](https://github.com/kgibb8/scuttle-invite-schema) for [scuttle-invite](https://github.com/kgibb8/scuttle-invite) ssb plugin. Allows for a polymorphic invitation/reply system to be used on-top of a `root ` record, such as a [Gathering](http://github.com/ssbc/patch-gathering).
 
 ```
 // Plug into a Scuttlebot server

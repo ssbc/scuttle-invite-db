@@ -7,7 +7,7 @@ const getContent = require('ssb-msg-content')
 const {
   isInvite,
   isReply
-} = require('ssb-invites-schema')
+} = require('scuttle-invite-schema')
 
 
 const FLUME_VIEW_VERSION = 1.0
